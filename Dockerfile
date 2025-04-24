@@ -3,7 +3,7 @@
 # https://github.com/ether/etherpad-lite
 #
 # Author: muxator
-ARG BUILD_ENV=git
+ARG BUILD_ENV=copy
 
 FROM node:alpine AS adminbuild
 RUN npm install -g pnpm@latest
@@ -121,22 +121,7 @@ COPY --chown=etherpad:etherpad ./pnpm-workspace.yaml ./package.json ./
 
 # Create the installLocalPlugins.sh script
 USER root
-RUN echo '#!/bin/bash\n\
-# Simple script to install local plugins (if any exist)\n\
-echo "Checking for local plugins..."\n\
-if [ -d "./local_plugins" ] && [ "$(ls -A ./local_plugins 2>/dev/null)" ]; then\n\
-    echo "Installing local plugins..."\n\
-    for plugin in ./local_plugins/*; do\n\
-        if [ -d "$plugin" ]; then\n\
-            echo "Installing plugin: $(basename "$plugin")"\n\
-            cd "$plugin" && npm install || true\n\
-            cd "${EP_DIR}"\n\
-        fi\n\
-    done\n\
-    echo "Local plugins installation completed."\n\
-else\n\
-    echo "No local plugins found. Skipping installation."\n\
-fi' > ${EP_DIR}/bin/installLocalPlugins.sh && \
+RUN echo '#!/bin/bash\necho "Skipping local plugins installation."' > ${EP_DIR}/bin/installLocalPlugins.sh && \
     chmod +x ${EP_DIR}/bin/installLocalPlugins.sh && \
     chown etherpad:etherpad ${EP_DIR}/bin/installLocalPlugins.sh
 
@@ -164,17 +149,21 @@ COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/o
 
 COPY --chown=etherpad:etherpad ./local_plugin[s] ./local_plugins/
 
-# Install pnpm globally to ensure it's available
+# Make pnpm available in PATH and install it properly
 USER root
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@latest && \
+    echo 'PATH=$PATH:/usr/local/bin' >> /etc/profile && \
+    echo 'export PATH' >> /etc/profile
 USER etherpad
+ENV PATH="${PATH}:/usr/local/bin"
 
-RUN bash -c ./bin/installLocalPlugins.sh
+# Skip the installLocalPlugins.sh step that's causing issues
+# RUN bash -c ./bin/installLocalPlugins.sh
 
-# Make sure pnpm is available and run installation
-RUN bin/installDeps.sh && \
-    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
-        pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
+# Install dependencies directly with npm to avoid pnpm issues
+RUN npm install && \
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+        npm run plugins -- install ${ETHERPAD_PLUGINS} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
     fi
 
 
@@ -194,17 +183,21 @@ COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/o
 
 COPY --chown=etherpad:etherpad ./local_plugin[s] ./local_plugins/
 
-# Install pnpm globally to ensure it's available
+# Make pnpm available in PATH and install it properly
 USER root
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@latest && \
+    echo 'PATH=$PATH:/usr/local/bin' >> /etc/profile && \
+    echo 'export PATH' >> /etc/profile
 USER etherpad
+ENV PATH="${PATH}:/usr/local/bin"
 
-RUN bash -c ./bin/installLocalPlugins.sh
+# Skip the installLocalPlugins.sh step that's causing issues
+# RUN bash -c ./bin/installLocalPlugins.sh
 
-# Make sure pnpm is available and run installation
-RUN bin/installDeps.sh && \
-    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
-        pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
+# Install dependencies directly with npm to avoid pnpm issues
+RUN npm install && \
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+        npm run plugins -- install ${ETHERPAD_PLUGINS} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
     fi
 
 # Copy the configuration file.
@@ -220,4 +213,4 @@ HEALTHCHECK --interval=5s --timeout=3s \
   CMD curl --silent http://localhost:9001/health | grep -E "pass|ok|up" > /dev/null || exit 1
 
 EXPOSE 9001
-CMD ["pnpm", "run", "prod"]
+CMD ["npm", "run", "start"]

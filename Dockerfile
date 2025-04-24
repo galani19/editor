@@ -129,7 +129,8 @@ if [ -d "./local_plugins" ] && [ "$(ls -A ./local_plugins 2>/dev/null)" ]; then\
     for plugin in ./local_plugins/*; do\n\
         if [ -d "$plugin" ]; then\n\
             echo "Installing plugin: $(basename "$plugin")"\n\
-            # Add installation commands here if needed\n\
+            cd "$plugin" && npm install || true\n\
+            cd "${EP_DIR}"\n\
         fi\n\
     done\n\
     echo "Local plugins installation completed."\n\
@@ -158,17 +159,23 @@ ARG ETHERPAD_LOCAL_PLUGINS_ENV=
 ARG ETHERPAD_GITHUB_PLUGINS=
 
 COPY --chown=etherpad:etherpad ./src/ ./src/
-COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/ templates/admin./src/templates/admin
+COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/templates/admin ./src/templates/admin
 COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/oidc ./src/static/oidc
 
 COPY --chown=etherpad:etherpad ./local_plugin[s] ./local_plugins/
 
+# Install pnpm globally to ensure it's available
+USER root
+RUN npm install -g pnpm@latest
+USER etherpad
+
 RUN bash -c ./bin/installLocalPlugins.sh
 
+# Make sure pnpm is available and run installation
 RUN bin/installDeps.sh && \
-  if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
-      pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
-  fi
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+        pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
+    fi
 
 
 FROM build_${BUILD_ENV} AS production
@@ -187,12 +194,18 @@ COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/static/o
 
 COPY --chown=etherpad:etherpad ./local_plugin[s] ./local_plugins/
 
+# Install pnpm globally to ensure it's available
+USER root
+RUN npm install -g pnpm@latest
+USER etherpad
+
 RUN bash -c ./bin/installLocalPlugins.sh
 
+# Make sure pnpm is available and run installation
 RUN bin/installDeps.sh && \
-  if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
-      pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
-  fi
+    if [ ! -z "${ETHERPAD_PLUGINS}" ] || [ ! -z "${ETHERPAD_LOCAL_PLUGINS}" ] || [ ! -z "${ETHERPAD_GITHUB_PLUGINS}" ]; then \
+        pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
+    fi
 
 # Copy the configuration file.
 COPY --chown=etherpad:etherpad ${SETTINGS} "${EP_DIR}"/settings.json

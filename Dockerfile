@@ -3,10 +3,9 @@
 # https://github.com/ether/etherpad-lite
 #
 # Author: muxator
-ARG BUILD_ENV=git
 
 FROM node:alpine AS adminbuild
-RUN npm install -g pnpm@latest
+RUN npm install -g pnpm@9.0.4
 WORKDIR /opt/etherpad-lite
 COPY . .
 RUN pnpm install
@@ -100,7 +99,7 @@ RUN mkdir -p "${EP_DIR}" && chown etherpad:etherpad "${EP_DIR}"
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199
 RUN  \
     mkdir -p /usr/share/man/man1 && \
-    npm install pnpm@latest -g  && \
+    npm install pnpm@9.0.4 -g  && \
     apk update && apk upgrade && \
     apk add --no-cache \
         ca-certificates \
@@ -114,27 +113,14 @@ USER etherpad
 WORKDIR "${EP_DIR}"
 
 # etherpads version feature requires this. Only copy what is really needed
+COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD
+COPY --chown=etherpad:etherpad ./.git/ref[s] ./.git/refs
 COPY --chown=etherpad:etherpad ${SETTINGS} ./settings.json
 COPY --chown=etherpad:etherpad ./var ./var
 COPY --chown=etherpad:etherpad ./bin ./bin
 COPY --chown=etherpad:etherpad ./pnpm-workspace.yaml ./package.json ./
 
-
-
-#FROM build AS build_git
-#ONBUILD COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD
-#ONBUILD COPY --chown=etherpad:etherpad ./.git/ref[s] ./.git/refs
-
-FROM build AS build_copy
-
-
-
-
-FROM build_${BUILD_ENV} AS development
-
-ARG ETHERPAD_PLUGINS=
-ARG ETHERPAD_LOCAL_PLUGINS=
-ARG ETHERPAD_GITHUB_PLUGINS=
+FROM build AS development
 
 COPY --chown=etherpad:etherpad ./src/ ./src/
 COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/ templates/admin./src/templates/admin
@@ -146,11 +132,7 @@ RUN bin/installDeps.sh && \
     fi
 
 
-FROM build_${BUILD_ENV} AS production
-
-ARG ETHERPAD_PLUGINS=
-ARG ETHERPAD_LOCAL_PLUGINS=
-ARG ETHERPAD_GITHUB_PLUGINS=
+FROM build AS production
 
 ENV NODE_ENV=production
 ENV ETHERPAD_PRODUCTION=true

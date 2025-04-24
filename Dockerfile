@@ -119,7 +119,27 @@ COPY --chown=etherpad:etherpad ./var ./var
 COPY --chown=etherpad:etherpad ./bin ./bin
 COPY --chown=etherpad:etherpad ./pnpm-workspace.yaml ./package.json ./
 
+# Create the installLocalPlugins.sh script
+USER root
+RUN echo '#!/bin/bash\n\
+# Simple script to install local plugins (if any exist)\n\
+echo "Checking for local plugins..."\n\
+if [ -d "./local_plugins" ] && [ "$(ls -A ./local_plugins 2>/dev/null)" ]; then\n\
+    echo "Installing local plugins..."\n\
+    for plugin in ./local_plugins/*; do\n\
+        if [ -d "$plugin" ]; then\n\
+            echo "Installing plugin: $(basename "$plugin")"\n\
+            # Add installation commands here if needed\n\
+        fi\n\
+    done\n\
+    echo "Local plugins installation completed."\n\
+else\n\
+    echo "No local plugins found. Skipping installation."\n\
+fi' > ${EP_DIR}/bin/installLocalPlugins.sh && \
+    chmod +x ${EP_DIR}/bin/installLocalPlugins.sh && \
+    chown etherpad:etherpad ${EP_DIR}/bin/installLocalPlugins.sh
 
+USER etherpad
 
 FROM build AS build_git
 #ONBUILD COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD

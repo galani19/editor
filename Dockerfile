@@ -5,12 +5,11 @@
 # Author: muxator
 
 FROM node:alpine AS adminbuild
-RUN npm install -g pnpm@9.0.4
+RUN npm install -g pnpm@latest
 WORKDIR /opt/etherpad-lite
 COPY . .
 RUN pnpm install
 RUN pnpm run build:ui
-
 
 FROM node:alpine AS build
 LABEL maintainer="Etherpad team, https://github.com/ether/etherpad-lite"
@@ -99,7 +98,7 @@ RUN mkdir -p "${EP_DIR}" && chown etherpad:etherpad "${EP_DIR}"
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199
 RUN  \
     mkdir -p /usr/share/man/man1 && \
-    npm install pnpm@9.0.4 -g  && \
+    npm install pnpm@latest -g  && \
     apk update && apk upgrade && \
     apk add --no-cache \
         ca-certificates \
@@ -113,14 +112,22 @@ USER etherpad
 WORKDIR "${EP_DIR}"
 
 # etherpads version feature requires this. Only copy what is really needed
-COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD
-COPY --chown=etherpad:etherpad ./.git/ref[s] ./.git/refs
 COPY --chown=etherpad:etherpad ${SETTINGS} ./settings.json
 COPY --chown=etherpad:etherpad ./var ./var
 COPY --chown=etherpad:etherpad ./bin ./bin
 COPY --chown=etherpad:etherpad ./pnpm-workspace.yaml ./package.json ./
 
-FROM build AS development
+# The following lines related to `.git` have been commented out to prevent errors
+#COPY --chown=etherpad:etherpad ./.git/HEA[D] ./.git/HEAD
+#COPY --chown=etherpad:etherpad ./.git/ref[s] ./.git/refs
+
+FROM build AS build_copy
+
+FROM build_${BUILD_ENV} AS development
+
+ARG ETHERPAD_PLUGINS=
+ARG ETHERPAD_LOCAL_PLUGINS=
+ARG ETHERPAD_GITHUB_PLUGINS=
 
 COPY --chown=etherpad:etherpad ./src/ ./src/
 COPY --chown=etherpad:etherpad --from=adminbuild /opt/etherpad-lite/src/ templates/admin./src/templates/admin
@@ -131,8 +138,11 @@ RUN bin/installDeps.sh && \
         pnpm run plugins i ${ETHERPAD_PLUGINS} ${ETHERPAD_LOCAL_PLUGINS:+--path ${ETHERPAD_LOCAL_PLUGINS}} ${ETHERPAD_GITHUB_PLUGINS:+--github ${ETHERPAD_GITHUB_PLUGINS}}; \
     fi
 
+FROM build_${BUILD_ENV} AS production
 
-FROM build AS production
+ARG ETHERPAD_PLUGINS=
+ARG ETHERPAD_LOCAL_PLUGINS=
+ARG ETHERPAD_GITHUB_PLUGINS=
 
 ENV NODE_ENV=production
 ENV ETHERPAD_PRODUCTION=true
